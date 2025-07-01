@@ -1,0 +1,18 @@
+{
+  "name": "azure-blob-storage",
+  "version": "1.0.0",
+  "description": "Secure file upload/download system",
+  "main": "index.js",
+  "scripts": {
+    "start:node1": "node node1_server.js",
+    "start:node2": "node node2_server.js",
+    "start:upload": "node upload_server.js",
+    "start:download": "node download_server.js",
+    "generate:keys": "node generate_keys.js"
+  },
+  "dependencies": {
+    "express": "^4.17.1",
+    "multer": "^1.4.5-lts.1",
+    "cors": "^2.8.5"
+  }
+}

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure Blob Storage - Upload File</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #0078d4;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .upload-section {
+            border: 2px dashed #ccc;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+        .upload-section.dragover {
+            border-color: #0078d4;
+            background-color: #f0f8ff;
+        }
+        #fileInput {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100%;
+        }
+        button {
+            background-color: #0078d4;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #106ebe;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .loading {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .progress {
+            margin-top: 20px;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #28a745;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .timestamp {
+            color: #6c757d;
+            font-size: 11px;
+        }
+        .nav {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .nav a {
+            color: #0078d4;
+            text-decoration: none;
+            margin: 0 15px;
+            font-weight: bold;
+        }
+        .nav a:hover {
+            text-decoration: underline;
+        }
+        .file-info {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="upload.html">📤 Upload</a>
+            <a href="download.html">📥 Download</a>
+        </div>
+        
+        <h1>🔐 Azure Blob Storage - Secure Upload</h1>
+        
+        <div class="upload-section" id="uploadSection">
+            <h3>📁 Chọn file để upload</h3>
+            <p>Kéo thả file vào đây hoặc click để chọn file</p>
+            <input type="file" id="fileInput" accept=".txt,.json,.csv,.xml">
+            <div class="file-info" id="fileInfo" style="display: none;"></div>
+            <button id="uploadBtn" onclick="uploadFile()" disabled>🚀 Upload File</button>
+            <button id="clearBtn" onclick="clearFile()" style="display: none;">🗑️ Xóa file</button>
+        </div>
+        
+        <div class="progress" id="progressSection" style="display: none;">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div id="progressText">0%</div>
+        </div>
+        
+        <div id="status"></div>
+        
+        <div class="log" id="logSection">
+            <div class="timestamp">📋 Log hệ thống:</div>
+            <div id="logContent"></div>
+        </div>
+    </div>
+
+    <script>
+        let selectedFile = null;
+        let uploadInProgress = false;
+
+        // Khởi tạo
+        document.addEventListener('DOMContentLoaded', function() {
+            setupDragAndDrop();
+            setupFileInput();
+            addLog('✅ Hệ thống upload đã sẵn sàng');
+            checkServerStatus();
+        });
+
+        function setupDragAndDrop() {
+            const uploadSection = document.getElementById('uploadSection');
+            
+            uploadSection.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                uploadSection.classList.add('dragover');
+            });
+            
+            uploadSection.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                uploadSection.classList.remove('dragover');
+            });
+            
+            uploadSection.addEventListener('drop', function(e) {
+                e.preventDefault();
+                uploadSection.classList.remove('dragover');
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFileSelect(files[0]);
+                }
+            });
+            
+            uploadSection.addEventListener('click', function() {
+                if (!uploadInProgress) {
+                    document.getElementById('fileInput').click();
+                }
+            });
+        }
+
+        function setupFileInput() {
+            document.getElementById('fileInput').addEventListener('change', function(e) {
+                if (e.target.files.length > 0) {
+                    handleFileSelect(e.target.files[0]);
+                }
+            });
+        }
+
+        function handleFileSelect(file) {
+            selectedFile = file;
+            
+            const fileInfo = document.getElementById('fileInfo');
+            const uploadBtn = document.getElementById('uploadBtn');
+            const clearBtn = document.getElementById('clearBtn');
+            
+            fileInfo.innerHTML = `
+                <strong>📄 File được chọn:</strong><br>
+                📝 Tên: ${file.name}<br>
+                📏 Kích thước: ${formatFileSize(file.size)}<br>
+                📅 Ngày sửa đổi: ${new Date(file.lastModified).toLocaleString('vi-VN')}
+            `;
+            
+            fileInfo.style.display = 'block';
+            uploadBtn.disabled = false;
+            clearBtn.style.display = 'inline-block';
+            
+            addLog(`📁 File được chọn: ${file.name} (${formatFileSize(file.size)})`);
+        }
+
+        function clearFile() {
+            selectedFile = null;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('fileInfo').style.display = 'none';
+            document.getElementById('uploadBtn').disabled = true;
+            document.getElementById('clearBtn').style.display = 'none';
+            addLog('🗑️ File đã được xóa');
+        }
+
+        async function uploadFile() {
+            if (!selectedFile || uploadInProgress) return;
+            
+            uploadInProgress = true;
+            updateProgress(0);
+            showProgress(true);
+            
+            const uploadBtn = document.getElementById('uploadBtn');
+            const clearBtn = document.getElementById('clearBtn');
+            uploadBtn.disabled = true;
+            clearBtn.style.display = 'none';
+            
+            addLog('🚀 Bắt đầu quá trình upload...');
+            showStatus('Đang upload file...', 'loading');
+            
+            try {
+                const startTime = Date.now();
+                
+                // Tạo FormData
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                
+                addLog('📦 Chuẩn bị dữ liệu upload');
+                updateProgress(10);
+                
+                // Gửi request
+                addLog('🔐 Bắt đầu mã hóa và upload đồng thời đến 2 nodes...');
+                updateProgress(20);
+                
+                const response = await fetch('http://localhost:3000/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                updateProgress(80);
+                addLog('📨 Nhận response từ server');
+                
+                const result = await response.json();
+                updateProgress(100);
+                
+                const processingTime = Date.now() - startTime;
+                
+                if (result.success) {
+                    showStatus(`✅ Upload thành công! Thời gian xử lý: ${processingTime}ms`, 'success');
+                    addLog(`✅ Upload thành công trong ${result.processingTime}ms`);
+                    addLog(`📋 Transaction ID: ${result.metadata.transactionId}`);
+                    addLog(`📄 File: ${result.metadata.filename}`);
+                    addLog(`⏰ Timestamp: ${result.metadata.timestamp}`);
+                    addLog(`💾 Kích thước: ${formatFileSize(result.metadata.size)}`);
+                    
+                    // Hiển thị kết quả từ nodes
+                    result.results.forEach((nodeResult, index) => {
+                        addLog(`🎯 ${nodeResult.node}: ${nodeResult.status} - ${nodeResult.message || 'OK'}`);
+                    });
+                    
+                } else {
+                    throw new Error(result.error);
+                }
+                
+            } catch (error) {
+                showStatus(`❌ Upload thất bại: ${error.message}`, 'error');
+                addLog(`❌ Lỗi upload: ${error.message}`);
+            } finally {
+                uploadInProgress = false;
+                uploadBtn.disabled = false;
+                clearBtn.style.display = 'inline-block';
+                
+                setTimeout(() => {
+                    showProgress(false);
+                }, 2000);
+            }
+        }
+
+        async function checkServerStatus() {
+            try {
+                const response = await fetch('http://localhost:3000/status');
+                const status = await response.json();
+                addLog(`🌐 Kết nối server thành công: ${status.server}`);
+            } catch (error) {
+                addLog(`⚠️ Không thể kết nối đến server: ${error.message}`);
+            }
+        }
+
+        function updateProgress(percent) {
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            
+            progressFill.style.width = percent + '%';
+            progressText.textContent = percent + '%';
+        }
+
+        function showProgress(show) {
+            const progressSection = document.getElementById('progressSection');
+            progressSection.style.display = show ? 'block' : 'none';
+        }
+
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.innerHTML = message;
+            status.className = 'status ' + type;
+            status.style.display = 'block';
+        }
+
+        function addLog(message) {
+            const logContent = document.getElementById('logContent');
+            const timestamp = new Date().toLocaleTimeString('vi-VN');
+            const logEntry = `<div><span class="timestamp">[${timestamp}]</span> ${message}</div>`;
+            logContent.innerHTML += logEntry;
+            
+            // Auto scroll to bottom
+            const logSection = document.getElementById('logSection');
+            logSection.scrollTop = logSection.scrollHeight;
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html>
